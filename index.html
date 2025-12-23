@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VCF Contact Generator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>VCF Batch Generator</h1>
+            <p>Add 500 contacts to unlock your download</p>
+        </header>
+
+        <div class="stats-card">
+            <div class="progress-bar">
+                <div id="progress-fill" style="width: 0%"></div>
+            </div>
+            <p><span id="contact-count">0</span> / 500 Contacts Collected</p>
+        </div>
+
+        <form id="contact-form">
+            <div class="input-group">
+                <input type="text" id="name" placeholder="Full Name" required>
+                <input type="number" id="age" placeholder="Age" required>
+            </div>
+            <div class="input-group">
+                <input type="text" id="country" placeholder="Country" required>
+                <input type="text" id="code" placeholder="+1" required>
+            </div>
+            <input type="tel" id="whatsapp" placeholder="WhatsApp Number" required>
+            
+            <button type="submit" id="add-btn">Add to Batch</button>
+        </form>
+
+        <div id="download-container" class="hidden">
+            <button id="download-btn">Download .VCF File</button>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
