@@ -72,6 +72,39 @@ button {
     overflow: hidden;
 }
 
+.secondary-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid #475569;
+    color: #94a3b8;
+    padding: 10px;
+    font-size: 0.85rem;
+}
+
+.btn-outline:hover {
+    border-color: #f8fafc;
+    color: #f8fafc;
+}
+
+.btn-danger {
+    background: transparent;
+    border: 1px solid #ef4444;
+    color: #ef4444;
+    padding: 10px;
+    font-size: 0.85rem;
+}
+
+.btn-danger:hover {
+    background: #ef4444;
+    color: white;
+}
+
 #progress-fill {
     background: var(--primary);
     height: 100%;
