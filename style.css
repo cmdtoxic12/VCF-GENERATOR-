@@ -105,6 +105,56 @@ button {
     color: white;
 }
 
+.preview-section {
+    margin-top: 30px;
+    border-top: 1px solid #334155;
+    padding-top: 20px;
+}
+
+.preview-section h3 {
+    font-size: 1rem;
+    margin-bottom: 15px;
+    color: #94a3b8;
+}
+
+.table-container {
+    max-height: 200px; /* Limits height and enables scroll */
+    overflow-y: auto;
+    border-radius: 8px;
+    background: #0f172a;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    text-align: left;
+}
+
+th {
+    position: sticky;
+    top: 0;
+    background: #1e293b;
+    padding: 10px;
+    color: var(--primary);
+}
+
+td {
+    padding: 10px;
+    border-bottom: 1px solid #1e293b;
+    color: #cbd5e1;
+}
+
+/* Custom Scrollbar for the table */
+.table-container::-webkit-scrollbar {
+    width: 6px;
+}
+.table-container::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 10px;
+}
+
+
 #progress-fill {
     background: var(--primary);
     height: 100%;
