@@ -37,17 +37,40 @@ function updateUI() {
     const count = contacts.length;
     countDisplay.innerText = count;
     
+    // Update Progress
     const percentage = (count / limit) * 100;
     progressFill.style.width = `${percentage}%`;
 
+    // Toggle Download Button
     if (count >= limit) {
         downloadContainer.classList.remove('hidden');
         document.getElementById('add-btn').disabled = true;
-        document.getElementById('add-btn').innerText = "Limit Reached";
     } else {
         downloadContainer.classList.add('hidden');
         document.getElementById('add-btn').disabled = false;
-        document.getElementById('add-btn').innerText = "Add to Batch";
+    }
+
+    // --- NEW: Update Preview Table ---
+    const tbody = document.getElementById('preview-body');
+    tbody.innerHTML = ""; // Clear current table
+
+    // Show last 10 contacts (to keep it fast) or show all
+    // Let's show all but reversed so newest is at the top
+    const displayList = [...contacts].reverse();
+
+    displayList.forEach(c => {
+        const row = `
+            <tr>
+                <td>${c.name}</td>
+                <td>${c.phone}</td>
+                <td>${c.country}</td>
+            </tr>
+        `;
+        tbody.innerHTML += row;
+    });
+
+    if (contacts.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='3' style='text-align:center; padding:20px;'>No contacts added yet.</td></tr>";
     }
 }
 
