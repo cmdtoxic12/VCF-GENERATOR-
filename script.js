@@ -73,3 +73,29 @@ document.getElementById('download-btn').addEventListener('click', () => {
     }
 });
 
+// --- NEW ACTION LISTENERS ---
+
+// Delete Last Entry
+document.getElementById('undo-btn').addEventListener('click', () => {
+    if (contacts.length > 0) {
+        if (confirm("Remove the last contact added?")) {
+            contacts.pop(); // Removes last item
+            localStorage.setItem('vcf_contacts', JSON.stringify(contacts));
+            updateUI();
+        }
+    } else {
+        alert("No contacts to remove!");
+    }
+});
+
+// Reset Everything
+document.getElementById('reset-btn').addEventListener('click', () => {
+    if (contacts.length > 0) {
+        if (confirm("Are you sure you want to delete ALL contacts? This cannot be undone.")) {
+            contacts = [];
+            localStorage.removeItem('vcf_contacts');
+            updateUI();
+        }
+    }
+});
+            
