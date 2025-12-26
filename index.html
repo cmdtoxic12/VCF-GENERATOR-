@@ -17,8 +17,8 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'vcf-studio-535679394';
-        const SESSION_ID = "535679394";
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'vcf-studio-ANONYMOUS';
+        const SESSION_ID = "ANONYMOUS";
 
         // State Management
         let contacts = [];
