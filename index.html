@@ -3,11 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VCF Studio Pro - 535679394</title>
+    <title>VCF Studio Pro - Cloud Manual</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <!-- Firebase SDKs -->
+    <style>
+        body { background-color: #020617; scroll-behavior: smooth; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+        input::placeholder { color: #334155; }
+        input:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 1px #6366f1; }
+    </style>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
         import { getFirestore, collection, addDoc, onSnapshot, query, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
@@ -17,33 +24,16 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'vcf-studio-ANONYMOUS';
-        const SESSION_ID = "ANONYMOUS";
+        
+        // This ID ensures data syncs across any device using this specific file
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'vcf-studio-535679394';
+        const SESSION_ID = "535679394";
 
-        // State Management
         let contacts = [];
         let currentUser = null;
 
-        const countries = [
-            { name: "Afghanistan", code: "+93" }, { name: "Albania", code: "+355" }, { name: "Algeria", code: "+213" },
-            { name: "Argentina", code: "+54" }, { name: "Australia", code: "+61" }, { name: "Austria", code: "+43" },
-            { name: "Bahrain", code: "+973" }, { name: "Bangladesh", code: "+880" }, { name: "Belgium", code: "+32" },
-            { name: "Brazil", code: "+55" }, { name: "Canada", code: "+1" }, { name: "China", code: "+86" },
-            { name: "Egypt", code: "+20" }, { name: "France", code: "+33" }, { name: "Germany", code: "+49" },
-            { name: "Ghana", code: "+233" }, { name: "India", code: "+91" }, { name: "Indonesia", code: "+62" },
-            { name: "Italy", code: "+39" }, { name: "Japan", code: "+81" }, { name: "Kenya", code: "+254" },
-            { name: "Mexico", code: "+52" }, { name: "Netherlands", code: "+31" }, { name: "Nigeria", code: "+234" },
-            { name: "Pakistan", code: "+92" }, { name: "Philippines", code: "+63" }, { name: "Russia", code: "+7" },
-            { name: "Saudi Arabia", code: "+966" }, { name: "South Africa", code: "+27" }, { name: "Spain", code: "+34" },
-            { name: "Switzerland", code: "+41" }, { name: "Turkey", code: "+90" }, { name: "UAE", code: "+971" },
-            { name: "United Kingdom", code: "+44" }, { name: "United States", code: "+1" }
-        ].sort((a, b) => a.name.localeCompare(b.name));
-
-        // Initialization
-        async function init() {
-            populateCountries();
-            
-            // Rule 3: Auth First
+        // --- AUTHENTICATION ---
+        async function initAuth() {
             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
@@ -51,44 +41,37 @@
                     await signInAnonymously(auth);
                 }
             } catch (err) {
-                console.error("Auth initialization failed", err);
+                console.error("Cloud Connection Failed", err);
             }
 
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     currentUser = user;
-                    document.getElementById('auth-status').textContent = 'CLOUD SYNC ACTIVE';
-                    document.getElementById('auth-status').className = 'text-[10px] font-bold text-emerald-500';
+                    const status = document.getElementById('auth-status');
+                    status.textContent = 'CLOUD SYNC ACTIVE';
+                    status.className = 'text-[10px] font-bold text-emerald-500 tracking-widest';
                     setupDataListener();
                 }
             });
         }
 
-        function populateCountries() {
-            const select = document.getElementById('countrySelect');
-            countries.forEach(c => {
-                const opt = document.createElement('option');
-                opt.value = c.name;
-                opt.textContent = c.name;
-                select.appendChild(opt);
-            });
-        }
-
-        // Rule 1: Strict Paths
+        // --- CLOUD SYNC ---
         function setupDataListener() {
+            // Rule 1: Use strict path for multi-device sync
             const q = collection(db, 'artifacts', appId, 'public', 'data', 'contacts');
+            
             onSnapshot(q, (snapshot) => {
                 contacts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                // Rule 2: In-memory sorting
+                // Rule 2: Sort in-memory
                 contacts.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
                 renderTable();
                 updateProgress();
             }, (err) => {
-                console.error("Cloud sync error:", err);
+                console.error("Sync Error:", err);
             });
         }
 
-        // UI Functions
+        // --- UI RENDERING ---
         function renderTable() {
             const tbody = document.getElementById('table-body');
             const emptyState = document.getElementById('empty-state');
@@ -100,13 +83,17 @@
             }
             
             emptyState.classList.add('hidden');
-            tbody.innerHTML = contacts.map((c, idx) => `
+            tbody.innerHTML = contacts.map((c) => `
                 <tr class="hover:bg-slate-800/40 border-b border-slate-800/50 transition-colors">
                     <td class="px-6 py-4 font-semibold text-slate-200">${c.name}</td>
-                    <td class="px-6 py-4 text-slate-400 text-sm"><i class="fa-solid fa-earth-africa mr-2 opacity-50"></i>${c.country}</td>
-                    <td class="px-6 py-4 font-mono text-indigo-400 text-sm">${c.full_phone}</td>
+                    <td class="px-6 py-4 text-slate-400 text-sm">
+                        <span class="bg-slate-800 px-2 py-1 rounded text-[10px] font-bold mr-2 text-slate-300 uppercase">${c.country}</span>
+                    </td>
+                    <td class="px-6 py-4 font-mono text-indigo-400 text-sm tracking-wide">
+                        <span class="text-slate-500 mr-1">${c.country_code}</span>${c.phone}
+                    </td>
                     <td class="px-6 py-4 text-right">
-                        <button onclick="window.deleteContact('${c.id}')" class="text-slate-500 hover:text-red-400 transition-colors p-2">
+                        <button onclick="window.deleteContact('${c.id}')" class="text-slate-500 hover:text-red-400 transition-all p-2 hover:scale-110">
                             <i class="fa-solid fa-trash-can"></i>
                         </button>
                     </td>
@@ -120,161 +107,150 @@
             const label = document.getElementById('progress-label');
             const downloadBtn = document.getElementById('download-btn');
 
-            const percent = Math.min((count / 200) * 100, 100);
-            bar.style.width = percent + '%';
+            bar.style.width = Math.min((count / 200) * 100, 100) + '%';
             label.textContent = `${count} / 200`;
-
-            if (count >= 200) {
-                downloadBtn.classList.remove('hidden');
-            } else {
-                downloadBtn.classList.add('hidden');
-            }
+            
+            if (count >= 200) downloadBtn.classList.remove('hidden');
+            else downloadBtn.classList.add('hidden');
         }
 
-        // Form Logic
-        document.getElementById('contact-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (!currentUser) return;
-            if (contacts.length >= 200) {
-                alert("Batch limit reached!");
-                return;
-            }
-
-            const name = document.getElementById('nameInput').value;
-            const country = document.getElementById('countrySelect').value;
-            const phone = document.getElementById('phoneInput').value;
-            const countryObj = countries.find(c => c.name === country);
-            const fullPhone = (countryObj ? countryObj.code : '') + phone;
-
-            try {
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'contacts'), {
-                    name,
-                    country,
-                    full_phone: fullPhone,
-                    session_id: SESSION_ID,
-                    userId: currentUser.uid,
-                    timestamp: serverTimestamp()
-                });
-                e.target.reset();
-                document.getElementById('code-display').value = '--';
-            } catch (err) {
-                console.error("Save error", err);
-            }
-        });
-
-        document.getElementById('countrySelect').addEventListener('change', (e) => {
-            const country = countries.find(c => c.name === e.target.value);
-            document.getElementById('code-display').value = country ? country.code : '--';
-        });
-
-        // Global Actions
+        // --- ACTIONS ---
         window.deleteContact = async (id) => {
             if (!currentUser) return;
             try {
                 await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'contacts', id));
             } catch (err) {
-                console.error("Delete error", err);
+                console.error("Delete Error", err);
             }
         };
 
         window.downloadVCF = async () => {
             const zip = new JSZip();
             contacts.forEach(c => {
-                const vcard = `BEGIN:VCARD\r\nVERSION:3.0\r\nFN:${c.name}\r\nTEL;TYPE=CELL:${c.full_phone}\r\nNOTE:Session ${SESSION_ID}\r\nEND:VCARD`;
+                const vcard = `BEGIN:VCARD\r\nVERSION:3.0\r\nFN:${c.name}\r\nTEL;TYPE=CELL:${c.country_code}${c.phone}\r\nNOTE:CloudSync Session ${SESSION_ID}\r\nEND:VCARD`;
                 zip.file(`${c.name.replace(/\s+/g, '_')}.vcf`, vcard);
             });
-            
             const content = await zip.generateAsync({type:"blob"});
-            const url = window.URL.createObjectURL(content);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `VCF_Batch_${SESSION_ID}.zip`;
-            a.click();
+            saveAs(content, `VCF_Cloud_Export_${SESSION_ID}.zip`);
         };
 
-        init();
+        function saveAs(blob, filename) {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        // --- FORM HANDLING ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('manual-form');
+            
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                if (!currentUser) return;
+
+                const submitBtn = form.querySelector('button[type="submit"]');
+                submitBtn.disabled = true;
+                const originalContent = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch animate-spin"></i> SYNCING...';
+
+                try {
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'contacts'), {
+                        name: document.getElementById('nameInput').value,
+                        country: document.getElementById('countryInput').value,
+                        country_code: document.getElementById('codeInput').value,
+                        phone: document.getElementById('phoneInput').value,
+                        timestamp: serverTimestamp(),
+                        sessionId: SESSION_ID
+                    });
+                    form.reset();
+                } catch (err) {
+                    console.error("Upload Error", err);
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalContent;
+                }
+            });
+
+            initAuth();
+        });
     </script>
-    <style>
-        body { background-color: #020617; scroll-behavior: smooth; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
-        select { appearance: none; }
-    </style>
 </head>
 <body class="text-slate-200">
 
-    <!-- Navbar -->
+    <!-- Header -->
     <header class="h-16 bg-slate-900 border-b border-slate-800 px-6 flex items-center justify-between sticky top-0 z-50 shadow-2xl">
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                <i class="fa-solid fa-cloud-arrow-up text-white"></i>
+                <i class="fa-solid fa-globe text-white text-lg"></i>
             </div>
             <div>
                 <h1 class="text-lg font-bold leading-none tracking-tight">VCF Studio <span class="text-indigo-500">Pro</span></h1>
-                <p id="auth-status" class="text-[10px] text-slate-500 mt-1">CONNECTING TO CLOUD...</p>
+                <p id="auth-status" class="text-[10px] text-slate-500 mt-1 uppercase tracking-widest">Connecting to Cloud...</p>
             </div>
         </div>
         <div class="text-right">
             <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Global ID</p>
-            <p class="font-mono text-sm text-slate-300">535679394</p>
+            <p class="font-mono text-sm text-slate-300 font-bold tracking-wider">535679394</p>
         </div>
     </header>
 
     <div class="max-w-[1600px] mx-auto flex flex-col lg:flex-row min-h-[calc(100vh-64px)]">
         
-        <!-- Controls Sidebar -->
+        <!-- Manual Input Sidebar -->
         <aside class="w-full lg:w-[400px] p-8 bg-slate-900/40 border-r border-slate-800/50">
             <div class="sticky top-24">
                 <div class="mb-8">
-                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-[0.2em] mb-6">Create New Record</h3>
-                    <form id="contact-form" class="space-y-5">
+                    <h3 class="text-xs font-bold text-slate-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
+                        <i class="fa-solid fa-keyboard text-[10px]"></i>
+                        Manual Record Entry
+                    </h3>
+                    
+                    <form id="manual-form" class="space-y-5">
                         <div class="space-y-1.5">
-                            <label class="text-[11px] font-bold text-slate-400 ml-1">CONTACT NAME</label>
-                            <input required id="nameInput" type="text" placeholder="e.g. Michael Smith" 
-                                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3.5 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all placeholder:text-slate-700">
+                            <label class="text-[11px] font-bold text-slate-400 ml-1 uppercase tracking-wider">Contact Full Name</label>
+                            <input required id="nameInput" type="text" placeholder="John Doe" 
+                                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3.5 text-sm outline-none transition-all placeholder:text-slate-800">
                         </div>
 
                         <div class="space-y-1.5">
-                            <label class="text-[11px] font-bold text-slate-400 ml-1">REGIONAL ORIGIN</label>
-                            <div class="relative">
-                                <select required id="countrySelect" 
-                                    class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3.5 text-sm focus:border-indigo-500 outline-none cursor-pointer">
-                                    <option value="">Select Region...</option>
-                                </select>
-                                <i class="fa-solid fa-chevron-down absolute right-4 top-4 text-slate-600 pointer-events-none text-xs"></i>
-                            </div>
+                            <label class="text-[11px] font-bold text-slate-400 ml-1 uppercase tracking-wider">Country Name</label>
+                            <input required id="countryInput" type="text" placeholder="e.g. United Kingdom" 
+                                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3.5 text-sm outline-none transition-all placeholder:text-slate-800">
                         </div>
 
                         <div class="grid grid-cols-12 gap-3">
                             <div class="col-span-4 space-y-1.5">
-                                <label class="text-[11px] font-bold text-slate-400 ml-1">PREFIX</label>
-                                <input id="code-display" readonly value="--" 
-                                    class="w-full bg-slate-900/50 border border-slate-800 rounded-xl py-3.5 text-sm text-center font-bold text-indigo-400 tracking-wider">
+                                <label class="text-[11px] font-bold text-slate-400 ml-1 uppercase tracking-wider">Dial Code</label>
+                                <input required id="codeInput" type="text" placeholder="+44" 
+                                    class="w-full bg-slate-950 border border-slate-800 rounded-xl py-3.5 text-sm text-center font-bold text-indigo-400 placeholder:text-slate-800">
                             </div>
                             <div class="col-span-8 space-y-1.5">
-                                <label class="text-[11px] font-bold text-slate-400 ml-1">LOCAL PHONE</label>
-                                <input required id="phoneInput" type="tel" placeholder="000 000 000" 
-                                    class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3.5 text-sm focus:border-indigo-500 outline-none placeholder:text-slate-700">
+                                <label class="text-[11px] font-bold text-slate-400 ml-1 uppercase tracking-wider">Phone Number</label>
+                                <input required id="phoneInput" type="tel" placeholder="7890 123456" 
+                                    class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3.5 text-sm outline-none placeholder:text-slate-800">
                             </div>
                         </div>
 
-                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-xl shadow-indigo-600/20 transition-all flex items-center justify-center gap-3 active:scale-[0.98]">
-                            <i class="fa-solid fa-plus-circle"></i>
-                            SAVE TO CLOUD
+                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-xl shadow-indigo-600/20 transition-all flex items-center justify-center gap-3 active:scale-[0.98] disabled:opacity-50">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            SAVE & SYNC
                         </button>
                     </form>
                 </div>
 
                 <div class="pt-8 border-t border-slate-800/50">
                     <div class="flex justify-between items-end mb-4">
-                        <span class="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Session Capacity</span>
+                        <span class="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Batch Quota</span>
                         <span id="progress-label" class="text-xs font-mono text-slate-400">0 / 200</span>
                     </div>
                     <div class="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
                         <div id="progress-bar" class="h-full bg-gradient-to-r from-indigo-600 to-violet-500 transition-all duration-700" style="width: 0%"></div>
                     </div>
                     
-                    <button id="download-btn" onclick="window.downloadVCF()" class="hidden mt-8 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-xl shadow-emerald-600/20 transition-all flex items-center justify-center gap-3 animate-bounce">
+                    <button id="download-btn" onclick="window.downloadVCF()" class="hidden mt-8 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-xl shadow-emerald-600/20 transition-all flex items-center justify-center gap-3">
                         <i class="fa-solid fa-file-zipper"></i>
                         DOWNLOAD VCF BATCH
                     </button>
@@ -282,30 +258,27 @@
             </div>
         </aside>
 
-        <!-- Main Workspace -->
+        <!-- List View -->
         <main class="flex-1 p-8">
             <div class="bg-slate-900/30 rounded-3xl border border-slate-800/60 overflow-hidden shadow-inner">
                 <div class="overflow-x-auto">
                     <table class="w-full text-left">
                         <thead>
                             <tr class="bg-slate-900/80 backdrop-blur-md">
-                                <th class="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Contact Identity</th>
-                                <th class="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Regional Origin</th>
-                                <th class="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Synced Number</th>
+                                <th class="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Full Name</th>
+                                <th class="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Origin</th>
+                                <th class="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Cloud Synced Number</th>
                                 <th class="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] text-right">Delete</th>
                             </tr>
                         </thead>
-                        <tbody id="table-body" class="divide-y divide-slate-800/30">
-                            <!-- Dynamic Rows -->
-                        </tbody>
+                        <tbody id="table-body" class="divide-y divide-slate-800/30"></tbody>
                     </table>
                 </div>
 
-                <!-- Empty State -->
                 <div id="empty-state" class="flex flex-col items-center justify-center py-32 text-slate-700">
-                    <i class="fa-solid fa-database text-6xl mb-6 opacity-20"></i>
-                    <p class="text-lg font-medium opacity-40">Cloud Database Empty</p>
-                    <p class="text-sm opacity-30 mt-1">Start adding records to sync them across sessions.</p>
+                    <i class="fa-solid fa-satellite-dish text-6xl mb-6 opacity-20 animate-pulse"></i>
+                    <p class="text-lg font-medium opacity-40 uppercase tracking-widest">No Cloud Data</p>
+                    <p class="text-sm opacity-30 mt-1">Manual entries will sync instantly across all devices.</p>
                 </div>
             </div>
         </main>
@@ -314,3 +287,4 @@
 </body>
 </html>
 
+    
