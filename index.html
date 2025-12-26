@@ -3,102 +3,129 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VCF Studio Pro - 535679394</title>
+    <title>VCF Studio Pro - Supabase Sync</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { background-color: #020617; scroll-behavior: smooth; }
+        body { background-color: #020617; font-family: 'Inter', system-ui, sans-serif; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
         input::placeholder { color: #334155; }
-        input:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 1px #6366f1; }
-        .sync-active { color: #10b981 !important; text-shadow: 0 0 8px rgba(16, 185, 129, 0.3); }
+        .sync-glow { text-shadow: 0 0 10px rgba(99, 102, 241, 0.5); }
+        .loading-shimmer {
+            background: linear-gradient(90deg, #0f172a 25%, #1e293b 50%, #0f172a 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     </style>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
-
-        // Constants
-        const SESSION_ID = "535679394";
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'vcf-studio-535679394';
+        // Using a persistent Session ID for global grouping
+        const GLOBAL_ID = "535679394";
         
-        let db, auth;
+        // Supabase Initialization
+        // These credentials are placeholders for a public "Demo" structure. 
+        // In a production environment, these would be your project URL and Anon Key.
+        const SUPABASE_URL = 'https://your-project-url.supabase.co';
+        const SUPABASE_KEY = 'your-anon-key';
+        
+        let supabase;
         let contacts = [];
-        let currentUser = null;
 
-        async function startApp() {
+        async function init() {
+            const status = document.getElementById('sync-status');
+            
             try {
-                const firebaseConfig = JSON.parse(__firebase_config);
-                const app = initializeApp(firebaseConfig);
-                auth = getAuth(app);
-                db = getFirestore(app);
-
-                // Rule 3: Auth First
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        currentUser = user;
-                        document.getElementById('auth-status').textContent = 'CLOUD SYNC ACTIVE';
-                        document.getElementById('auth-status').classList.add('sync-active');
-                        initDataSync();
-                    }
-                });
+                // Initialize Supabase client
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                
+                status.textContent = "CLOUD ACTIVE";
+                status.classList.add('text-indigo-400', 'sync-glow');
+                
+                loadContacts();
+                subscribeToChanges();
             } catch (err) {
-                console.error("Initialization Failed:", err);
-                document.getElementById('auth-status').textContent = 'OFFLINE MODE (CHECK CONFIG)';
+                status.textContent = "LOCAL MODE (NO CLOUD)";
+                console.error("Supabase Error:", err);
             }
         }
 
-        // Rule 1: Strict Paths for cross-device sync
-        function initDataSync() {
-            const contactsRef = collection(db, 'artifacts', appId, 'public', 'data', 'contacts');
-            
-            onSnapshot(contactsRef, (snapshot) => {
-                contacts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                // Rule 2: In-memory sorting
-                contacts.sort((a, b) => {
-                    const timeA = a.timestamp?.seconds || 0;
-                    const timeB = b.timestamp?.seconds || 0;
-                    return timeB - timeA;
-                });
+        async function loadContacts() {
+            // Fetch existing contacts from the 'contacts' table
+            const { data, error } = await supabase
+                .from('contacts')
+                .select('*')
+                .eq('session_group', GLOBAL_ID)
+                .order('created_at', { ascending: false });
+
+            if (!error) {
+                contacts = data;
                 renderUI();
-            }, (error) => {
-                console.error("Firestore Sync Error:", error);
-            });
+            }
+        }
+
+        function subscribeToChanges() {
+            // Real-time subscription to the 'contacts' table
+            supabase
+                .channel('public:contacts')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'contacts' }, payload => {
+                    loadContacts(); // Refresh list on any change
+                })
+                .subscribe();
+        }
+
+        async function addContact(e) {
+            e.preventDefault();
+            const btn = e.target.querySelector('button');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> SYNCING...';
+
+            const payload = {
+                name: document.getElementById('nameInput').value,
+                country: document.getElementById('countryInput').value,
+                country_code: document.getElementById('codeInput').value,
+                phone: document.getElementById('phoneInput').value,
+                session_group: GLOBAL_ID
+            };
+
+            const { error } = await supabase.from('contacts').insert([payload]);
+
+            if (error) {
+                alert("Upload failed. Ensure Supabase table 'contacts' exists.");
+            } else {
+                e.target.reset();
+            }
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> SAVE & SYNC';
+        }
+
+        async function deleteContact(id) {
+            await supabase.from('contacts').delete().eq('id', id);
         }
 
         function renderUI() {
             const tbody = document.getElementById('table-body');
-            const emptyState = document.getElementById('empty-state');
-            const progressLabel = document.getElementById('progress-label');
-            const progressBar = document.getElementById('progress-bar');
-            const downloadBtn = document.getElementById('download-btn');
-
-            // Table
+            const empty = document.getElementById('empty-state');
+            
             if (contacts.length === 0) {
-                emptyState.classList.remove('hidden');
+                empty.classList.remove('hidden');
                 tbody.innerHTML = '';
             } else {
-                emptyState.classList.add('hidden');
+                empty.classList.add('hidden');
                 tbody.innerHTML = contacts.map(c => `
                     <tr class="hover:bg-slate-800/40 border-b border-slate-800/50 transition-colors">
-                        <td class="px-6 py-4 font-semibold text-slate-200">${c.name || 'N/A'}</td>
-                        <td class="px-6 py-4">
-                            <span class="bg-slate-800 px-2 py-1 rounded text-[10px] font-bold text-slate-400 uppercase tracking-tighter">${c.country || 'GLOBAL'}</span>
+                        <td class="px-6 py-4 font-semibold text-slate-200">${c.name}</td>
+                        <td class="px-6 py-4 text-slate-400 text-sm">
+                            <span class="bg-slate-800 px-2 py-1 rounded text-[10px] font-bold text-slate-300 uppercase">${c.country}</span>
                         </td>
                         <td class="px-6 py-4 font-mono text-indigo-400 text-sm">
-                            <span class="text-slate-600 mr-1">${c.country_code || ''}</span>${c.phone || ''}
+                            <span class="text-slate-500 mr-1">${c.country_code}</span>${c.phone}
                         </td>
                         <td class="px-6 py-4 text-right">
-                            <button onclick="window.removeContact('${c.id}')" class="text-slate-600 hover:text-red-400 transition-all p-2">
+                            <button onclick="window.removeRecord('${c.id}')" class="text-slate-600 hover:text-red-400 transition-all p-2">
                                 <i class="fa-solid fa-trash-can"></i>
                             </button>
                         </td>
@@ -106,23 +133,13 @@
                 `).join('');
             }
 
-            // Progress
             const count = contacts.length;
-            progressLabel.textContent = `${count} / 200`;
-            progressBar.style.width = Math.min((count / 200) * 100, 100) + '%';
-            
-            if (count >= 200) downloadBtn.classList.remove('hidden');
-            else downloadBtn.classList.add('hidden');
+            document.getElementById('progress-label').textContent = `${count} / 200`;
+            document.getElementById('progress-bar').style.width = (Math.min(count, 200) / 200 * 100) + '%';
+            document.getElementById('download-btn').classList.toggle('hidden', count < 200);
         }
 
-        // Global Handlers
-        window.removeContact = async (id) => {
-            if (!currentUser) return;
-            try {
-                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'contacts', id));
-            } catch (e) { console.error("Delete failed", e); }
-        };
-
+        window.removeRecord = deleteContact;
         window.exportVCF = async () => {
             const zip = new JSZip();
             contacts.forEach(c => {
@@ -130,50 +147,15 @@
                 zip.file(`${c.name.replace(/\W/g, '_')}.vcf`, vcard);
             });
             const content = await zip.generateAsync({type:"blob"});
-            const url = URL.createObjectURL(content);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = `VCF_EXPORT_${SESSION_ID}.zip`;
+            a.href = URL.createObjectURL(content);
+            a.download = `VCF_Cloud_Export_${GLOBAL_ID}.zip`;
             a.click();
         };
 
-        // Form Submission
-        window.addEventListener('load', () => {
-            const form = document.getElementById('vcf-form');
-            form.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                if (!currentUser) {
-                    alert("Syncing not ready. Please wait...");
-                    return;
-                }
-
-                const btn = form.querySelector('button[type="submit"]');
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> SYNCING...';
-
-                try {
-                    const payload = {
-                        name: document.getElementById('nameInput').value,
-                        country: document.getElementById('countryInput').value,
-                        country_code: document.getElementById('codeInput').value,
-                        phone: document.getElementById('phoneInput').value,
-                        timestamp: serverTimestamp(),
-                        sessionId: SESSION_ID,
-                        ownerId: currentUser.uid
-                    };
-
-                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'contacts'), payload);
-                    form.reset();
-                } catch (err) {
-                    console.error("Save Error:", err);
-                    alert("Error saving to cloud. Please try again.");
-                } finally {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> SAVE & SYNC';
-                }
-            });
-
-            startApp();
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('vcf-form').addEventListener('submit', addContact);
+            init();
         });
     </script>
 </head>
@@ -182,16 +164,16 @@
     <header class="h-16 bg-slate-900 border-b border-slate-800 px-6 flex items-center justify-between sticky top-0 z-50">
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                <i class="fa-solid fa-tower-broadcast text-white"></i>
+                <i class="fa-solid fa-bolt-lightning text-white"></i>
             </div>
             <div>
-                <h1 class="text-lg font-bold tracking-tight">VCF Studio <span class="text-indigo-500">Sync</span></h1>
-                <p id="auth-status" class="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-bold">Connecting...</p>
+                <h1 class="text-lg font-bold leading-none tracking-tight">VCF Studio <span class="text-indigo-500">Supabase</span></h1>
+                <p id="sync-status" class="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-black">Connecting...</p>
             </div>
         </div>
         <div class="text-right">
             <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Global Sync ID</p>
-            <p class="font-mono text-sm text-slate-300 font-bold">535679394</p>
+            <p class="font-mono text-sm text-slate-300 font-bold tracking-wider">535679394</p>
         </div>
     </header>
 
@@ -201,37 +183,37 @@
             <div class="sticky top-24">
                 <div class="mb-8">
                     <h3 class="text-xs font-bold text-slate-500 uppercase tracking-[0.2em] mb-6 flex items-center gap-2">
-                        <i class="fa-solid fa-pen-to-square text-[10px]"></i>
-                        Manual Entry
+                        <i class="fa-solid fa-keyboard text-[10px]"></i>
+                        Manual Record Entry
                     </h3>
                     
                     <form id="vcf-form" class="space-y-5">
                         <div class="space-y-1.5">
-                            <label class="text-[11px] font-bold text-slate-400 ml-1 uppercase">Contact Full Name</label>
-                            <input required id="nameInput" type="text" placeholder="e.g. John Doe" 
-                                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3.5 text-sm outline-none transition-all placeholder:text-slate-800">
+                            <label class="text-[11px] font-bold text-slate-400 ml-1 uppercase">Full Name</label>
+                            <input required id="nameInput" type="text" placeholder="John Doe" 
+                                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3.5 text-sm outline-none focus:border-indigo-500 transition-all">
                         </div>
 
                         <div class="space-y-1.5">
                             <label class="text-[11px] font-bold text-slate-400 ml-1 uppercase">Country</label>
-                            <input required id="countryInput" type="text" placeholder="e.g. Nigeria" 
-                                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3.5 text-sm outline-none transition-all placeholder:text-slate-800">
+                            <input required id="countryInput" type="text" placeholder="United States" 
+                                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3.5 text-sm outline-none focus:border-indigo-500 transition-all">
                         </div>
 
                         <div class="grid grid-cols-12 gap-3">
                             <div class="col-span-4 space-y-1.5">
-                                <label class="text-[11px] font-bold text-slate-400 ml-1 uppercase">Code</label>
-                                <input required id="codeInput" type="text" placeholder="+234" 
-                                    class="w-full bg-slate-950 border border-slate-800 rounded-xl py-3.5 text-sm text-center font-bold text-indigo-400 placeholder:text-slate-800">
+                                <label class="text-[11px] font-bold text-slate-400 ml-1 uppercase">Dial Code</label>
+                                <input required id="codeInput" type="text" placeholder="+1" 
+                                    class="w-full bg-slate-950 border border-slate-800 rounded-xl py-3.5 text-sm text-center font-bold text-indigo-400">
                             </div>
                             <div class="col-span-8 space-y-1.5">
                                 <label class="text-[11px] font-bold text-slate-400 ml-1 uppercase">Phone Number</label>
-                                <input required id="phoneInput" type="tel" placeholder="8012345678" 
-                                    class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3.5 text-sm outline-none placeholder:text-slate-800">
+                                <input required id="phoneInput" type="tel" placeholder="202-555-0123" 
+                                    class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3.5 text-sm outline-none focus:border-indigo-500 transition-all">
                             </div>
                         </div>
 
-                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-xl shadow-indigo-600/20 transition-all flex items-center justify-center gap-3 active:scale-[0.98]">
+                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-xl shadow-indigo-600/20 transition-all flex items-center justify-center gap-3 active:scale-95">
                             <i class="fa-solid fa-cloud-arrow-up"></i>
                             SAVE & SYNC
                         </button>
@@ -240,7 +222,7 @@
 
                 <div class="pt-8 border-t border-slate-800/50">
                     <div class="flex justify-between items-end mb-4">
-                        <span class="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Progress</span>
+                        <span class="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Cloud Progress</span>
                         <span id="progress-label" class="text-xs font-mono text-slate-400">0 / 200</span>
                     </div>
                     <div class="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
@@ -249,22 +231,22 @@
                     
                     <button id="download-btn" onclick="window.exportVCF()" class="hidden mt-8 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-xl shadow-emerald-600/20 transition-all flex items-center justify-center gap-3">
                         <i class="fa-solid fa-file-zipper"></i>
-                        DOWNLOAD VCF BATCH
+                        DOWNLOAD BATCH
                     </button>
                 </div>
             </div>
         </aside>
 
         <main class="flex-1 p-8">
-            <div class="bg-slate-900/30 rounded-3xl border border-slate-800/60 overflow-hidden shadow-inner min-h-[400px]">
+            <div class="bg-slate-900/30 rounded-3xl border border-slate-800/60 overflow-hidden shadow-inner min-h-[500px]">
                 <div class="overflow-x-auto">
                     <table class="w-full text-left">
                         <thead>
                             <tr class="bg-slate-900/80 backdrop-blur-md">
-                                <th class="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Name</th>
-                                <th class="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Country</th>
-                                <th class="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Synced Number</th>
-                                <th class="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Action</th>
+                                <th class="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Name</th>
+                                <th class="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Region</th>
+                                <th class="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Cloud Number</th>
+                                <th class="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] text-right">Action</th>
                             </tr>
                         </thead>
                         <tbody id="table-body" class="divide-y divide-slate-800/30"></tbody>
@@ -272,9 +254,9 @@
                 </div>
 
                 <div id="empty-state" class="flex flex-col items-center justify-center py-32 text-slate-700">
-                    <i class="fa-solid fa-cloud text-6xl mb-6 opacity-20"></i>
-                    <p class="text-lg font-medium opacity-40 uppercase tracking-widest">Cloud is Empty</p>
-                    <p class="text-sm opacity-30 mt-1 text-center px-6">Any contacts you add will instantly sync to all other devices using this Global ID.</p>
+                    <i class="fa-solid fa-database text-6xl mb-6 opacity-20"></i>
+                    <p class="text-lg font-medium opacity-40 uppercase tracking-widest">No Cloud Data</p>
+                    <p class="text-sm opacity-30 mt-1">Manual entries will sync instantly across all devices via Supabase.</p>
                 </div>
             </div>
         </main>
@@ -283,4 +265,4 @@
 </body>
 </html>
 
-    
+            
